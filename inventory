@@ -1,0 +1,16 @@
+[server1]
+192.168.3.236
+
+[server2]
+192.168.3.235
+
+# Connection settings
+[all:vars]
+ansible_connection='ssh'
+ansible_ssh_port='22'
+ansible_user='vagrant'
+ansible_ssh_private_key_file=/home/yuuzukatsu/.ssh/yzk
+
+# [pg:vars]
+# ansible_user='postgres'
+# ansible_ssh_pass='postgres'

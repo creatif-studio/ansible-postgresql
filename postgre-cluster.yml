@@ -1,0 +1,100 @@
+- hosts: all
+  become: true
+  vars:
+    server_list: 
+      - 192.168.3.236
+      - 192.168.3.235
+
+  tasks:
+  
+    - name: Install PostgreSQL
+      ansible.builtin.apt:
+        name: 
+          - postgresql-12
+        update_cache: true
+    
+    - name: Listen on all address
+      ansible.builtin.lineinfile:
+        path: /etc/postgresql/12/main/postgresql.conf
+        regexp: "#listen_addresses = 'localhost'"
+        line: "listen_addresses = '*'"
+    
+    - name: Enable Public Access
+      ansible.builtin.lineinfile:
+        path: /etc/postgresql/12/main/pg_hba.conf
+        regexp: '^host all all'
+        line: 'host all all all md5'
+
+    - name: Restart and Enable PostgreSQL service
+      ansible.builtin.service:
+        name: postgresql
+        state: restarted
+        enabled: true
+
+    # Masih cari cara run via ansible
+    # - name: Create psql user with replication and create replication table
+    #   ansible.builtin.shell: |
+    #     sudo -u postgres psql
+    #     CREATE ROLE duplikat WITH REPLICATION PASSWORD 'duplikatpass';
+    #     CREATE DATABASE duplikat;
+    #     GRANT ALL ON DATABASE duplikat TO duplikat;
+    #     SELECT * FROM pg_create_physical_replication_slot('duplikat_slot');
+    #     exit;
+    
+    - name: Add Server list to pg_hba.conf for database duplikat
+      ansible.builtin.lineinfile:
+        path: /etc/postgresql/12/main/pg_hba.conf
+        regexp: 'host duplikat duplikat {{item}}/32 trust'
+        line: 'host duplikat duplikat {{item}}/32 trust'
+      loop:
+        "{{server_list}}"
+
+    - name: Restart PostgreSQL service
+      ansible.builtin.service:
+        name: postgresql
+        state: restarted
+
+#     - name: Run Replication #ERROR
+#       ansible.builtin.shell: |
+#         pg_basebackup -h "{{item}}" -D /var/lib/postgresql/12/main -P -v -X stream --slot=duplikat_slot -U duplikat
+#       loop:
+#         "{{server_list}}"
+# # FATAL:  no pg_hba.conf entry for replication connection from host "192.168.3.236", user "duplikat", SSL on
+# # FATAL:  no pg_hba.conf entry for replication connection from host "192.168.3.236", user "duplikat", SSL off
+
+
+    - name: wal_level = logical
+      ansible.builtin.lineinfile:
+        path: /etc/postgresql/12/main/postgresql.conf
+        regexp: "#wal_level = replica"
+        line: "wal_level = logical"
+
+    
+    - name: max_wal_senders = 10
+      ansible.builtin.lineinfile:
+        path: /etc/postgresql/12/main/postgresql.conf
+        regexp: "#max_wal_senders = 10"
+        line: "max_wal_senders = 10"
+
+    
+    - name: wal_keep_segments = 10
+      ansible.builtin.lineinfile:
+        path: /etc/postgresql/12/main/postgresql.conf
+        regexps: "#wal_keep_segments = 0"
+        line: "wal_keep_segments = 10"
+    
+    - name: max_replication_slots = 10
+      ansible.builtin.lineinfile:
+        path: /etc/postgresql/12/main/postgresql.conf
+        regexp: "#max_replication_slots = 10"
+        line: "max_replication_slots = 10"
+
+    - name: Trigger Replication
+      ansible.builtin.file:
+        path: /var/lib/postgresql/12/main/trigger
+        state: touch
+
+    - name: Run Replication
+      ansible.builtin.shell: |
+        pg_ctlcluster 12 main start
+      

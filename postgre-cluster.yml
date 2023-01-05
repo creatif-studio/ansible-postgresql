@@ -38,14 +38,15 @@
     #     CREATE ROLE duplikat WITH REPLICATION PASSWORD 'duplikatpass';
     #     CREATE DATABASE duplikat;
     #     GRANT ALL ON DATABASE duplikat TO duplikat;
+    #     ALTER ROLE duplikat WITH login;
     #     SELECT * FROM pg_create_physical_replication_slot('duplikat_slot');
     #     exit;
     
     - name: Add Server list to pg_hba.conf for database duplikat
       ansible.builtin.lineinfile:
         path: /etc/postgresql/12/main/pg_hba.conf
-        regexp: 'host duplikat duplikat {{item}}/32 trust'
-        line: 'host duplikat duplikat {{item}}/32 trust'
+        regexp: 'host replication duplikat {{item}}/32 trust'
+        line: 'host replication duplikat {{item}}/32 trust'
       loop:
         "{{server_list}}"
 
@@ -54,14 +55,11 @@
         name: postgresql
         state: restarted
 
-#     - name: Run Replication #ERROR
-#       ansible.builtin.shell: |
-#         pg_basebackup -h "{{item}}" -D /var/lib/postgresql/12/main -P -v -X stream --slot=duplikat_slot -U duplikat
-#       loop:
-#         "{{server_list}}"
-# # FATAL:  no pg_hba.conf entry for replication connection from host "192.168.3.236", user "duplikat", SSL on
-# # FATAL:  no pg_hba.conf entry for replication connection from host "192.168.3.236", user "duplikat", SSL off
-
+    - name: Run Replication
+      ansible.builtin.shell: |
+        pg_basebackup -h "{{item}}" -D /var/lib/postgresql/12/main/ -P -v -X stream --slot=duplikat_slot -U duplikat
+      loop:
+        "{{server_list}}"
 
     - name: wal_level = logical
       ansible.builtin.lineinfile:
